@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>Stundenplan · Küche Altenbach</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232a2118'/%3E%3Cpath d='M8 22V10h4.2c2.7 0 4.3 1.4 4.3 3.5 0 2.2-1.6 3.6-4.3 3.6H11v4.9H8zm3-7.4h1c1.2 0 1.9-.6 1.9-1.5S13.2 12.6 12 12.6H11v2z' fill='%23f6f0e6'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="sheet">
+      <header class="masthead">
+        <div>
+          <p class="eyebrow">Stundenplan · Winter</p>
+          <h1>Altenbach</h1>
+          <p class="lede">Küche</p>
+        </div>
+        <div class="mast-side">
+          <ul class="legend">
+            <li data-person="alex">Alex</li>
+            <li data-person="miki">Miki</li>
+            <li data-person="seferina">Seferina</li>
+          </ul>
+          <p class="e-note"><strong>E</strong> = Ende. Die Schlusszeit steht vorher nicht fest.</p>
+        </div>
+      </header>
+
+      <div class="toolbar">
+        <div class="mode no-print" role="group" aria-label="Was bearbeitet wird">
+          <button type="button" id="mode-week" aria-pressed="true">Diese Woche</button>
+          <button type="button" id="mode-standard" aria-pressed="false">Standardplan</button>
+        </div>
+        <p id="saved" class="saved no-print" hidden>Gespeichert</p>
+
+        <div class="weekbar">
+          <button type="button" id="prev-week" class="nav no-print" aria-label="Vorherige Woche">←</button>
+          <div class="week-title">
+            <p id="week-relation">Diese Woche</p>
+            <h2 id="week-label"></h2>
+          </div>
+          <button type="button" id="next-week" class="nav no-print" aria-label="Nächste Woche">→</button>
+          <button type="button" id="today-week" class="text-btn no-print">Heute</button>
+        </div>
+
+        <div id="banner" class="banner" hidden>
+          <p id="banner-text"></p>
+          <button type="button" id="discard-week" class="text-btn no-print" hidden>Woche zurücksetzen</button>
+        </div>
+
+        <label id="note-wrap" class="note">
+          <span>Notiz zur Woche</span>
+          <input id="week-note" type="text" maxlength="280" placeholder="Zum Beispiel Feier, Tausch oder früher Schluss" />
+        </label>
+
+        <div id="confirm" class="confirm no-print" hidden>
+          <p id="confirm-text"></p>
+          <div>
+            <button type="button" id="confirm-yes">Ja</button>
+            <button type="button" id="confirm-no" class="text-btn">Abbrechen</button>
+          </div>
+        </div>
+
+        <div class="actions no-print">
+          <button type="button" id="print-btn">Drucken</button>
+          <button type="button" id="copy-btn">WhatsApp-Text</button>
+          <details>
+            <summary>Sicherung</summary>
+            <div class="menu">
+              <button type="button" id="download-btn">Plan herunterladen</button>
+              <button type="button" id="upload-btn">Plan laden</button>
+              <button type="button" id="restore-standard">Winterplan wiederherstellen</button>
+              <button type="button" id="clear-weeks">Alle Wochen zurücksetzen</button>
+            </div>
+          </details>
+          <input id="upload-input" type="file" accept="application/json,.json" hidden />
+        </div>
+
+        <div id="copy-fallback" class="fallback no-print" hidden>
+          <p>Markiere den Text und kopiere ihn mit Strg+C.</p>
+          <textarea id="copy-text" readonly></textarea>
+        </div>
+      </div>
+
+      <p id="hint" class="hint no-print">
+        <span>Klicke auf einen Tag und ändere die Zeiten. Jede Woche merkt sich das in diesem Browser. Ohne eigene Änderung gilt der Standardplan.</span>
+        <button type="button" id="hint-close" aria-label="Hinweis schließen">×</button>
+      </p>
+
+      <section class="block" aria-labelledby="times-heading">
+        <div class="section-head">
+          <h3 id="times-heading">Die Zeiten</h3>
+          <p>Die Woche beginnt am Sonntag. Ein Klick auf den Tag öffnet die Zeiten.</p>
+        </div>
+        <div id="rota"></div>
+      </section>
+
+      <section class="block" aria-labelledby="coverage-heading">
+        <div class="section-head">
+          <h3 id="coverage-heading">Wer ist wann da</h3>
+          <p>Balken sind Schichten. Gestrichelt heißt bis Ende. Rot heißt: zwischen 10 und 22 Uhr ist niemand da.</p>
+        </div>
+        <div id="days"></div>
+      </section>
+
+      <footer class="colophon no-print">
+        <p>Gespeichert in diesem Browser auf diesem Computer. Zum Mitnehmen unter Sicherung den Plan herunterladen.</p>
+      </footer>
+    </div>
+
+    <div id="toast" class="toast no-print" role="status" hidden></div>
+
+    <dialog id="editor" aria-labelledby="editor-title">
+      <form method="dialog">
+        <div class="editor-head">
+          <div>
+            <p id="editor-kicker"></p>
+            <h2 id="editor-title"></h2>
+          </div>
+          <button type="button" id="editor-close" class="nav" aria-label="Schließen">×</button>
+        </div>
+        <p id="editor-context"></p>
+        <p id="editor-errors" class="errors" hidden></p>
+        <div id="shift-list"></div>
+        <button type="button" id="add-shift" class="text-btn add-shift">Weitere Schicht</button>
+        <fieldset>
+          <legend>Schnellwahl</legend>
+          <div id="presets" class="presets"></div>
+        </fieldset>
+        <p class="editor-save">Änderungen werden sofort gespeichert.</p>
+        <div class="editor-foot">
+          <button type="submit" class="primary">Fertig</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="plan.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
