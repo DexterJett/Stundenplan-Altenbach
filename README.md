@@ -2,7 +2,17 @@
 
 Stundenplan für die Küche im Restaurant Altenbach.
 
-`index.html` im Browser öffnen (Chrome oder Edge). Ein Doppelklick reicht. Änderungen bleiben in diesem Browser gespeichert.
+Online: [dexterjett.github.io/Stundenplan-Altenbach](https://dexterjett.github.io/Stundenplan-Altenbach/)
+
+Lokal reicht ein Doppelklick auf `index.html` in Chrome oder Edge. Änderungen bleiben in diesem Browser gespeichert.
+
+## GitHub Pages
+
+Die Seite wird aus diesem Repository veröffentlicht. Nach einem Push auf `main` legt der Workflow `.github/workflows/pages.yml` die Dateien `index.html`, `styles.css`, `app.js` und `plan.js` auf GitHub Pages.
+
+Einmalig unter **Settings → Pages → Build and deployment** die Quelle **GitHub Actions** wählen.
+
+Das Repository ist privat. Bei einem kostenlosen GitHub-Konto muss es öffentlich sein, damit die Adresse ohne Anmeldung aufgeht. Namen und Zeiten sind dann im Internet sichtbar.
 
 ## Bedienung
 
