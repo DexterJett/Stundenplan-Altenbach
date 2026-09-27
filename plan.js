@@ -48,8 +48,11 @@
   const SCALE_START = 10 * 60;
   const SCALE_END = 23 * 60;
 
+  const DAY_NOTE_MAX = 40;
+
   const PRESETS = [
     { label: "Frei", shifts: [] },
+    { label: "Urlaub", shifts: [], absence: "urlaub" },
     { label: "10–Ende", shifts: [{ start: "10:00", end: null }] },
     {
       label: "10–13 & 16–22",
@@ -177,15 +180,57 @@
       });
   }
 
+  function readAbsence(plan, personId, dayId) {
+    const entry = plan && plan.absence && plan.absence[personId];
+    if (!entry || entry[dayId] !== "urlaub") return null;
+    const shifts = plan[personId] && plan[personId][dayId];
+    if (Array.isArray(shifts) && shifts.length > 0) return null;
+    return "urlaub";
+  }
+
+  function setAbsence(plan, personId, dayId, absence) {
+    if (!plan.absence || typeof plan.absence !== "object") plan.absence = {};
+    if (!plan.absence[personId] || typeof plan.absence[personId] !== "object") {
+      plan.absence[personId] = {};
+    }
+    if (absence === "urlaub") plan.absence[personId][dayId] = "urlaub";
+    else delete plan.absence[personId][dayId];
+    if (Object.keys(plan.absence[personId]).length === 0) delete plan.absence[personId];
+    if (Object.keys(plan.absence).length === 0) delete plan.absence;
+  }
+
   function sanitizePlan(plan) {
     const next = {};
     for (const person of PEOPLE) {
       next[person.id] = {};
       for (const day of DAYS) {
-        next[person.id][day.id] = canonicalShifts(plan[person.id][day.id]);
+        const raw = plan[person.id] && plan[person.id][day.id];
+        next[person.id][day.id] = canonicalShifts(Array.isArray(raw) ? raw : []);
+      }
+    }
+    for (const person of PEOPLE) {
+      for (const day of DAYS) {
+        if (readAbsence(plan, person.id, day.id) === "urlaub") {
+          setAbsence(next, person.id, day.id, "urlaub");
+        }
       }
     }
     return next;
+  }
+
+  function sanitizeDayNotes(value) {
+    const notes = {};
+    for (const day of DAYS) {
+      const raw = value && typeof value[day.id] === "string" ? value[day.id] : "";
+      notes[day.id] = raw.replace(/\s+/g, " ").trim().slice(0, DAY_NOTE_MAX);
+    }
+    return notes;
+  }
+
+  function dayNotesEqual(a, b) {
+    const left = sanitizeDayNotes(a);
+    const right = sanitizeDayNotes(b);
+    return DAYS.every((day) => left[day.id] === right[day.id]);
   }
 
   function isPlan(plan) {
@@ -218,8 +263,9 @@
     return `${shift.start}–${shift.end}`;
   }
 
-  function formatShiftList(shifts) {
-    if (!shifts.length) return "frei";
+  function formatShiftList(shifts, absence) {
+    if (absence === "urlaub" && (!shifts || !shifts.length)) return "Urlaub";
+    if (!shifts || !shifts.length) return "frei";
     return shifts.map(formatShift).join(" · ");
   }
 
@@ -360,11 +406,16 @@
     if (options.note) {
       lines.push(options.note, "");
     }
+    const dayNotes = sanitizeDayNotes(options.dayNotes);
     for (const day of DAYS) {
       lines.push(day.label);
+      if (dayNotes[day.id]) lines.push(dayNotes[day.id]);
       for (const person of PEOPLE) {
         const shifts = plan[person.id][day.id];
-        const text = shifts.length ? shifts.map(formatShift).join(", ") : "frei";
+        const absence = readAbsence(plan, person.id, day.id);
+        const text = absence === "urlaub"
+          ? "Urlaub"
+          : (shifts.length ? shifts.map(formatShift).join(", ") : "frei");
         lines.push(`${person.name}: ${text}`);
       }
       lines.push("");
@@ -385,11 +436,14 @@
       if (seen.has(key)) continue;
       if (validateShifts(item.shifts).length) continue;
       seen.add(key);
-      presets.push({
+      const shifts = canonicalShifts(item.shifts);
+      const preset = {
         id: typeof item.id === "string" && item.id ? item.id : `eigen-${presets.length + 1}`,
         label,
-        shifts: canonicalShifts(item.shifts),
-      });
+        shifts,
+      };
+      if (item.absence === "urlaub" && shifts.length === 0) preset.absence = "urlaub";
+      presets.push(preset);
       if (presets.length >= 24) break;
     }
     return presets;
@@ -414,6 +468,7 @@
     DAYS,
     MONTHS,
     PRESETS,
+    DAY_NOTE_MAX,
     SERVICE_START,
     SERVICE_END,
     SCALE_START,
@@ -424,6 +479,10 @@
     clonePlan,
     canonicalShifts,
     sanitizePlan,
+    readAbsence,
+    setAbsence,
+    sanitizeDayNotes,
+    dayNotesEqual,
     isPlan,
     shiftsEqual,
     plansEqual,

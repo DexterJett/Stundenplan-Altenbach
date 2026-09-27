@@ -16,10 +16,11 @@ Der Wochenplan liegt verschlüsselt in `vault.js`. Ohne Passwort sind die Zeiten
 
 - Die Woche beginnt am Montag und endet am Sonntag.
 - Mit den Pfeilen die Woche wählen. **Diese Woche** ändert nur diese Woche, **Standardplan** ändert die Vorlage.
-- Einen Tag anklicken und die Zeiten anpassen. **Ende** heißt: die Schicht läuft, bis Feierabend ist. Im alten Plan stand dafür **E**.
+- Einen Tag anklicken und die Zeiten anpassen. **Ende** heißt: die Schicht läuft, bis Feierabend ist. Im alten Plan stand dafür **E**. **Urlaub** ist wie Frei, steht aber als Urlaub im Plan.
+- Unter jedem Datum eine kurze Info zum Tag, falls an dem Tag etwas Besonderes ist.
 - Unter **Schnellwahl** die aktuellen Zeiten benennen und mit **Diese Zeiten merken** sichern. Eigene Schnellwahlen lassen sich mit dem Kreuz wieder entfernen.
 - Wochen ohne eigene Anpassung übernehmen den Standardplan.
-- **Drucken** erzeugt eine A4-Seite im Querformat mit den Zeiten der Woche. **WhatsApp-Text** kopiert den Plan zum Verschicken.
+- **Drucken** erzeugt eine A4-Seite im Querformat mit den Zeiten, den Tagesinfos und dem Hinweis „Änderungen vorbehalten“. **WhatsApp-Text** kopiert den Plan zum Verschicken.
 - Unter **Sicherung** den Plan herunterladen, wenn er auf einen anderen Computer soll.
 
 ## Tests

@@ -70,6 +70,7 @@
   let toastTimer = 0;
   let editorCtx = null;
   let draft = [];
+  let draftAbsence = null;
 
   els.modeWeek.addEventListener("click", () => setMode("week"));
   els.modeStandard.addEventListener("click", () => setMode("standard"));
@@ -101,7 +102,26 @@
   els.print.addEventListener("click", () => window.print());
   window.addEventListener("beforeprint", () => {
     els.noteWrap.classList.toggle("is-empty", !els.note.value.trim());
+    for (const input of els.rota.querySelectorAll("[data-day-note-input]")) {
+      input.classList.toggle("is-empty", !input.value.trim());
+    }
   });
+  function onDayNoteInput(event) {
+    const input = event.target.closest("[data-day-note-input]");
+    if (!input) return;
+    saveDayNote(input.dataset.dayNoteInput, input.value);
+  }
+  function onDayNoteBlur(event) {
+    const input = event.target.closest("[data-day-note-input]");
+    if (!input) return;
+    const clean = input.value.replace(/\s+/g, " ").trim().slice(0, P.DAY_NOTE_MAX);
+    if (input.value !== clean) input.value = clean;
+    saveDayNote(input.dataset.dayNoteInput, clean);
+  }
+  els.rota.addEventListener("input", onDayNoteInput);
+  els.rota.addEventListener("focusout", onDayNoteBlur);
+  els.days.addEventListener("input", onDayNoteInput);
+  els.days.addEventListener("focusout", onDayNoteBlur);
   els.copy.addEventListener("click", copyWhatsApp);
   els.download.addEventListener("click", downloadPlan);
   els.upload.addEventListener("click", () => els.uploadInput.click());
@@ -132,8 +152,10 @@
   });
   els.close.addEventListener("click", () => els.editor.close());
   els.addShift.addEventListener("click", () => {
+    draftAbsence = null;
     draft.push(P.suggestNextShift(draft));
     renderDraft();
+    afterDraftEdit();
     const inputs = els.shiftList.querySelectorAll('input[type="time"]');
     const last = inputs[inputs.length - 2] || inputs[inputs.length - 1];
     if (last) last.focus();
@@ -189,28 +211,61 @@
 
   function ensureWeek() {
     if (!state.weeks[weekId]) {
-      state.weeks[weekId] = { plan: P.clonePlan(state.standard), note: "" };
+      state.weeks[weekId] = {
+        plan: P.clonePlan(state.standard),
+        note: "",
+        dayNotes: P.sanitizeDayNotes(state.dayNotes),
+      };
     }
+    if (!state.weeks[weekId].dayNotes) state.weeks[weekId].dayNotes = P.sanitizeDayNotes(null);
     return state.weeks[weekId];
   }
 
   function collapseWeekIfClean() {
     const week = state.weeks[weekId];
     if (!week) return;
-    if (!week.note.trim() && P.plansEqual(week.plan, state.standard)) {
+    const notes = P.sanitizeDayNotes(week.dayNotes);
+    if (!week.note.trim() && P.plansEqual(week.plan, state.standard) && P.dayNotesEqual(notes, state.dayNotes)) {
       delete state.weeks[weekId];
     }
   }
 
-  function commit(personId, dayId, shifts) {
-    const next = P.canonicalShifts(shifts);
+  function activeDayNotes() {
+    if (mode === "standard" || !state.weeks[weekId]) return state.dayNotes;
+    return state.weeks[weekId].dayNotes || P.sanitizeDayNotes(null);
+  }
+
+  function saveDayNote(dayId, value) {
+    const text = String(value || "").slice(0, P.DAY_NOTE_MAX);
     if (mode === "standard") {
-      state.standard[personId][dayId] = next;
+      state.dayNotes[dayId] = text;
     } else {
       const week = ensureWeek();
-      week.plan[personId][dayId] = next;
+      week.dayNotes[dayId] = text;
       collapseWeekIfClean();
+      updateWeekStatus();
     }
+    for (const input of document.querySelectorAll(`[data-day-note-input="${dayId}"]`)) {
+      if (input.value !== text) input.value = text;
+    }
+    persist(true);
+  }
+
+  function updateWeekStatus() {
+    if (mode === "standard") return;
+    const custom = weekIsCustom();
+    els.banner.hidden = !custom;
+    els.bannerText.textContent = "Diese Woche ist angepasst.";
+    els.discard.hidden = !custom;
+  }
+
+  function commit(personId, dayId, shifts) {
+    const next = P.canonicalShifts(shifts);
+    const absence = next.length === 0 && draftAbsence === "urlaub" ? "urlaub" : null;
+    const target = mode === "standard" ? state.standard : ensureWeek().plan;
+    target[personId][dayId] = next;
+    P.setAbsence(target, personId, dayId, absence);
+    if (mode !== "standard") collapseWeekIfClean();
     persist(true);
     render({ keepEditor: true });
   }
@@ -254,6 +309,7 @@
   }
 
   function renderTable(plan, sunday, todayId, standardMode) {
+    const notes = activeDayNotes();
     const table = el("table");
     const thead = el("thead");
     const headRow = el("tr");
@@ -262,7 +318,17 @@
       const date = P.addDays(sunday, index);
       const head = el("th", { scope: "col" });
       if (P.toDateId(date) === todayId && !standardMode) head.classList.add("is-today");
-      head.append(day.short, el("span", null, `${date.getDate()}.${date.getMonth() + 1}.`));
+      const note = el("input", {
+        class: "day-note-input",
+        type: "text",
+        maxlength: String(P.DAY_NOTE_MAX),
+        placeholder: "Kurzinfo",
+        value: notes[day.id] || "",
+        autocomplete: "off",
+        "aria-label": `Kurzinfo ${day.label}`,
+        "data-day-note-input": day.id,
+      });
+      head.append(day.short, el("span", null, `${date.getDate()}.${date.getMonth() + 1}.`), note);
       headRow.append(head);
     });
     thead.append(headRow);
@@ -278,8 +344,9 @@
       row.append(name);
       P.DAYS.forEach((day, index) => {
         const shifts = plan[person.id][day.id];
+        const absence = P.readAbsence(plan, person.id, day.id);
         const date = P.addDays(sunday, index);
-        const changed = !standardMode && weekIsCustom() && !P.shiftsEqual(shifts, state.standard[person.id][day.id]);
+        const changed = cellChanged(plan, person.id, day.id, standardMode);
         const cell = el("td");
         if (P.toDateId(date) === todayId && !standardMode) cell.classList.add("is-today");
         if (changed) cell.classList.add("is-changed");
@@ -288,10 +355,12 @@
           class: "cell",
           "data-person": person.id,
           "data-day": day.id,
-          "aria-label": ariaLabel(person, day, shifts, changed),
+          "aria-label": ariaLabel(person, day, shifts, absence, changed),
         });
         const pills = el("div", { class: "pills" });
-        if (!shifts.length) {
+        if (absence === "urlaub") {
+          pills.append(el("span", { class: "leave" }, "Urlaub"));
+        } else if (!shifts.length) {
           pills.append(el("span", { class: "free" }, "frei"));
         } else {
           for (const shift of shifts) {
@@ -325,11 +394,23 @@
         title.append(el("span", { class: "today-pill" }, "heute"));
       }
       head.append(title);
+      const noteField = el("label", { class: "day-note-field" });
+      noteField.append(el("span", null, "Kurzinfo"));
+      noteField.append(el("input", {
+        class: "day-note-input",
+        type: "text",
+        maxlength: String(P.DAY_NOTE_MAX),
+        placeholder: "Zum Beispiel Feier oder Lieferung",
+        value: (activeDayNotes()[day.id] || ""),
+        autocomplete: "off",
+        "aria-label": `Kurzinfo ${day.label}`,
+        "data-day-note-input": day.id,
+      }));
       const gaps = P.findDayGaps(plan, day.id);
       if (gaps.length) {
         head.append(el("p", { class: "gap-label" }, `Niemand da: ${P.formatGaps(gaps)}`));
       }
-      card.append(head, renderAxis());
+      card.append(head, noteField, renderAxis());
 
       const lanes = el("div", { class: "lanes" });
       if (gaps.length) {
@@ -344,20 +425,23 @@
 
       for (const person of P.PEOPLE) {
         const shifts = plan[person.id][day.id];
-        const changed = !standardMode && weekIsCustom() && !P.shiftsEqual(shifts, state.standard[person.id][day.id]);
+        const absence = P.readAbsence(plan, person.id, day.id);
+        const changed = cellChanged(plan, person.id, day.id, standardMode);
         const lane = el("button", {
           type: "button",
           class: changed ? "lane is-changed" : "lane",
           "data-person": person.id,
           "data-day": day.id,
-          "aria-label": ariaLabel(person, day, shifts, changed),
+          "aria-label": ariaLabel(person, day, shifts, absence, changed),
         });
         lane.append(el("span", { class: "lane-name" }, person.name));
         const track = el("span", { class: "track" });
         for (let hour = 10; hour <= 23; hour += 1) {
           track.append(el("i", { class: "gridline", style: `left:${P.scalePercent(hour * 60)}%` }));
         }
-        if (!shifts.length) {
+        if (absence === "urlaub") {
+          track.append(el("span", { class: "frei-label leave" }, "Urlaub"));
+        } else if (!shifts.length) {
           track.append(el("span", { class: "frei-label" }, "frei"));
         } else {
           for (const shift of shifts) {
@@ -396,9 +480,15 @@
     return axis;
   }
 
-  function ariaLabel(person, day, shifts, changed) {
+  function cellChanged(plan, personId, dayId, standardMode) {
+    if (standardMode || !weekIsCustom()) return false;
+    return !P.shiftsEqual(plan[personId][dayId], state.standard[personId][dayId])
+      || P.readAbsence(plan, personId, dayId) !== P.readAbsence(state.standard, personId, dayId);
+  }
+
+  function ariaLabel(person, day, shifts, absence, changed) {
     const suffix = changed ? " Geändert gegenüber dem Standard." : "";
-    return `${person.name}, ${day.label}: ${P.formatShiftList(shifts)}. Zeiten ändern.${suffix}`;
+    return `${person.name}, ${day.label}: ${P.formatShiftList(shifts, absence)}. Zeiten ändern.${suffix}`;
   }
 
   function openEditor(personId, dayId) {
@@ -407,7 +497,9 @@
     const day = P.DAYS.find((item) => item.id === dayId);
     const sunday = P.parseDateId(weekId);
     const date = P.addDays(sunday, P.DAYS.findIndex((item) => item.id === dayId));
-    draft = P.canonicalShifts(displayPlan()[personId][dayId]).map((shift) => ({ ...shift }));
+    const current = displayPlan();
+    draft = P.canonicalShifts(current[personId][dayId]).map((shift) => ({ ...shift }));
+    draftAbsence = P.readAbsence(current, personId, dayId);
     els.title.textContent = person.name;
     els.kicker.textContent = mode === "standard"
       ? `${day.label} · Standardplan`
@@ -415,7 +507,8 @@
     if (mode === "standard") {
       els.context.textContent = "Du änderst die Vorlage für alle Wochen ohne eigene Anpassung.";
     } else {
-      els.context.textContent = `Vorlage an diesem Tag: ${P.formatShiftList(state.standard[personId][dayId])}`;
+      const standardAbsence = P.readAbsence(state.standard, personId, dayId);
+      els.context.textContent = `Vorlage an diesem Tag: ${P.formatShiftList(state.standard[personId][dayId], standardAbsence)}`;
     }
     renderDraft();
     els.editor.showModal();
@@ -426,7 +519,8 @@
   function renderDraft() {
     els.shiftList.replaceChildren();
     if (!draft.length) {
-      els.shiftList.append(el("p", { class: "empty-day" }, "An diesem Tag frei."));
+      const emptyText = draftAbsence === "urlaub" ? "An diesem Tag Urlaub." : "An diesem Tag frei.";
+      els.shiftList.append(el("p", { class: "empty-day" }, emptyText));
     }
     draft.forEach((shift, index) => {
       const row = el("div", { class: "shift-row" });
@@ -498,8 +592,9 @@
     return state && Array.isArray(state.presets) ? state.presets : [];
   }
 
-  function applyPreset(shifts) {
-    draft = shifts.map((shift) => ({ ...shift }));
+  function applyPreset(preset) {
+    draft = preset.shifts.map((shift) => ({ ...shift }));
+    draftAbsence = preset.absence === "urlaub" ? "urlaub" : null;
     renderDraft();
     afterDraftEdit();
   }
@@ -533,15 +628,17 @@
       type: "button",
       class: custom ? "preset-apply" : "",
       "data-shifts": JSON.stringify(P.canonicalShifts(preset.shifts)),
+      "data-absence": preset.absence === "urlaub" ? "urlaub" : "",
     }, preset.label);
-    button.addEventListener("click", () => applyPreset(preset.shifts));
+    button.addEventListener("click", () => applyPreset(preset));
     return button;
   }
 
   function updatePresetActive() {
     const current = JSON.stringify(P.canonicalShifts(draft));
+    const absence = draftAbsence === "urlaub" ? "urlaub" : "";
     for (const button of els.presets.querySelectorAll("[data-shifts]")) {
-      button.classList.toggle("is-active", button.dataset.shifts === current);
+      button.classList.toggle("is-active", button.dataset.shifts === current && (button.dataset.absence || "") === absence);
     }
   }
 
@@ -565,14 +662,19 @@
       return;
     }
     const shifts = P.canonicalShifts(draft);
+    const absence = shifts.length === 0 && draftAbsence === "urlaub" ? "urlaub" : null;
     const existing = state.presets.find((preset) => preset.label.toLocaleLowerCase("de") === label.toLocaleLowerCase("de"));
     if (existing) {
       existing.shifts = shifts;
+      if (absence) existing.absence = absence;
+      else delete existing.absence;
     } else if (state.presets.length >= 24) {
       toast("Es passen höchstens 24 eigene Schnellwahlen.");
       return;
     } else {
-      state.presets.push({ id: crypto.randomUUID(), label, shifts });
+      const preset = { id: crypto.randomUUID(), label, shifts };
+      if (absence) preset.absence = absence;
+      state.presets.push(preset);
     }
     els.presetName.value = "";
     persist(true);
@@ -586,6 +688,7 @@
     const text = P.formatWhatsApp(plan, {
       title: mode === "standard" ? "Winterplan" : P.formatRange(P.parseDateId(weekId)),
       note,
+      dayNotes: activeDayNotes(),
     });
     try {
       await navigator.clipboard.writeText(text);
@@ -600,7 +703,13 @@
   }
 
   function downloadPlan() {
-    const payload = { version: 2, standard: state.standard, weeks: state.weeks, presets: state.presets };
+    const payload = {
+      version: 3,
+      standard: state.standard,
+      weeks: state.weeks,
+      presets: state.presets,
+      dayNotes: state.dayNotes,
+    };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -618,7 +727,7 @@
       toast("Die Datei konnte nicht gelesen werden.");
       return;
     }
-    if (!data || (data.version !== 1 && data.version !== 2) || !P.isPlan(data.standard)) {
+    if (!data || (data.version !== 1 && data.version !== 2 && data.version !== 3) || !P.isPlan(data.standard)) {
       toast("Das ist keine gültige Sicherungsdatei.");
       return;
     }
@@ -629,11 +738,13 @@
         weeks[id] = {
           plan: P.sanitizePlan(week.plan),
           note: typeof week.note === "string" ? week.note.slice(0, 280) : "",
+          dayNotes: P.sanitizeDayNotes(week.dayNotes),
         };
       }
     }
     ask("Den Plan auf diesem Computer durch die Datei ersetzen?", () => {
       state.standard = P.sanitizePlan(data.standard);
+      state.dayNotes = P.sanitizeDayNotes(data.dayNotes);
       state.weeks = weeks;
       if (Array.isArray(data.presets)) state.presets = P.sanitizePresets(data.presets);
       persist(true);
@@ -670,6 +781,7 @@
     const snapshot = {
       standard: state.standard,
       weeks: state.weeks,
+      dayNotes: state.dayNotes,
       lastWeekId: state.lastWeekId,
       hintDismissed: state.hintDismissed === true,
       presets: state.presets,
@@ -679,6 +791,7 @@
         const secret = await P.encryptJson({
           standard: snapshot.standard,
           weeks: snapshot.weeks,
+          dayNotes: snapshot.dayNotes,
           presets: snapshot.presets,
         }, password);
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
@@ -707,6 +820,7 @@
       version: 2,
       standard: P.clonePlan(defaultStandard),
       weeks: {},
+      dayNotes: P.sanitizeDayNotes(null),
       presets: [],
       lastWeekId: P.toDateId(P.startOfWeek(new Date())),
       hintDismissed: false,
@@ -721,12 +835,14 @@
       if (!raw.secret) return base;
       const secret = await P.decryptJson(raw.secret, password);
       if (P.isPlan(secret.standard)) base.standard = P.sanitizePlan(secret.standard);
+      if (secret.dayNotes) base.dayNotes = P.sanitizeDayNotes(secret.dayNotes);
       if (secret.weeks && typeof secret.weeks === "object") {
         for (const [id, week] of Object.entries(secret.weeks)) {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(id) || !week || !P.isPlan(week.plan)) continue;
           base.weeks[id] = {
             plan: P.sanitizePlan(week.plan),
             note: typeof week.note === "string" ? week.note.slice(0, 280) : "",
+            dayNotes: P.sanitizeDayNotes(week.dayNotes),
           };
         }
       }
