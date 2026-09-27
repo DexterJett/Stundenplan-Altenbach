@@ -2,7 +2,11 @@
   "use strict";
 
   const P = window.AltenbachPlan;
-  const STORAGE_KEY = "altenbach-stundenplan-v1";
+  const STORAGE_KEY = "altenbach-stundenplan-v2";
+  const LEGACY_KEY = "altenbach-stundenplan-v1";
+  const PASS_KEY = "altenbach-passwort";
+  const SESSION_KEY = "altenbach-sitzung";
+  const LOCK_KEY = "altenbach-gesperrt";
 
   const els = {
     modeWeek: document.querySelector("#mode-week"),
@@ -45,11 +49,21 @@
     addShift: document.querySelector("#add-shift"),
     presets: document.querySelector("#presets"),
     close: document.querySelector("#editor-close"),
+    lock: document.querySelector("#lock"),
+    lockForm: document.querySelector("#lock-form"),
+    lockPassword: document.querySelector("#lock-password"),
+    lockRemember: document.querySelector("#lock-remember"),
+    lockError: document.querySelector("#lock-error"),
+    lockSubmit: document.querySelector("#lock-submit"),
+    lockBtn: document.querySelector("#lock-btn"),
+    sheet: document.querySelector(".sheet"),
   };
 
-  const state = loadState();
+  let defaultStandard = null;
+  let password = "";
+  let state = null;
   let mode = "week";
-  let weekId = state.lastWeekId;
+  let weekId = "";
   let savedTimer = 0;
   let toastTimer = 0;
   let editorCtx = null;
@@ -93,7 +107,7 @@
   });
   els.restore.addEventListener("click", () => {
     ask("Den Standardplan auf den ursprünglichen Winterplan zurücksetzen? Wochen mit eigener Anpassung bleiben unverändert.", () => {
-      state.standard = P.clonePlan(P.DEFAULT_STANDARD);
+      state.standard = P.clonePlan(defaultStandard);
       persist(true);
       render();
     });
@@ -124,9 +138,11 @@
   });
   els.rota.addEventListener("click", onEditClick);
   els.days.addEventListener("click", onEditClick);
+  els.lockForm.addEventListener("submit", onUnlock);
+  els.lockBtn.addEventListener("click", lockApp);
 
   buildPresets();
-  render();
+  boot().catch(() => showGate());
 
   function onEditClick(event) {
     const button = event.target.closest("[data-person][data-day]");
@@ -567,19 +583,33 @@
     }, 3200);
   }
 
+  let persistChain = Promise.resolve();
+
   function persist(announce) {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        version: 1,
-        standard: state.standard,
-        weeks: state.weeks,
-        lastWeekId: state.lastWeekId,
-        hintDismissed: state.hintDismissed === true,
-      }));
-      if (announce) markSaved();
-    } catch {
-      toast("Speichern fehlgeschlagen. Der Plan bleibt nur bis zum Schließen des Browsers.");
-    }
+    if (!password || !state) return;
+    const snapshot = {
+      standard: state.standard,
+      weeks: state.weeks,
+      lastWeekId: state.lastWeekId,
+      hintDismissed: state.hintDismissed === true,
+    };
+    persistChain = persistChain
+      .then(async () => {
+        const secret = await P.encryptJson({
+          standard: snapshot.standard,
+          weeks: snapshot.weeks,
+        }, password);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          version: 2,
+          lastWeekId: snapshot.lastWeekId,
+          hintDismissed: snapshot.hintDismissed,
+          secret,
+        }));
+        if (announce) markSaved();
+      })
+      .catch(() => {
+        toast("Speichern fehlgeschlagen. Der Plan bleibt nur bis zum Schließen des Browsers.");
+      });
   }
 
   function markSaved() {
@@ -590,20 +620,26 @@
     }, 1600);
   }
 
-  function loadState() {
+  async function loadState() {
     const base = {
-      version: 1,
-      standard: P.clonePlan(P.DEFAULT_STANDARD),
+      version: 2,
+      standard: P.clonePlan(defaultStandard),
       weeks: {},
       lastWeekId: P.toDateId(P.startOfWeek(new Date())),
       hintDismissed: false,
     };
     try {
       const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-      if (!raw || raw.version !== 1) return base;
-      if (P.isPlan(raw.standard)) base.standard = P.sanitizePlan(raw.standard);
-      if (raw.weeks && typeof raw.weeks === "object") {
-        for (const [id, week] of Object.entries(raw.weeks)) {
+      if (!raw || raw.version !== 2) return base;
+      base.hintDismissed = raw.hintDismissed === true;
+      if (typeof raw.lastWeekId === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.lastWeekId)) {
+        base.lastWeekId = raw.lastWeekId;
+      }
+      if (!raw.secret) return base;
+      const secret = await P.decryptJson(raw.secret, password);
+      if (P.isPlan(secret.standard)) base.standard = P.sanitizePlan(secret.standard);
+      if (secret.weeks && typeof secret.weeks === "object") {
+        for (const [id, week] of Object.entries(secret.weeks)) {
           if (!/^\d{4}-\d{2}-\d{2}$/.test(id) || !week || !P.isPlan(week.plan)) continue;
           base.weeks[id] = {
             plan: P.sanitizePlan(week.plan),
@@ -611,14 +647,90 @@
           };
         }
       }
-      if (typeof raw.lastWeekId === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.lastWeekId)) {
-        base.lastWeekId = raw.lastWeekId;
-      }
-      base.hintDismissed = raw.hintDismissed === true;
     } catch {
       return base;
     }
     return base;
+  }
+
+  async function unlock(pw, options) {
+    const packed = await P.decryptJson(window.ALTENBACH_VAULT, pw);
+    if (!packed || !P.isPlan(packed.standard)) throw new Error("Tresor ungültig");
+    defaultStandard = P.sanitizePlan(packed.standard);
+    password = pw;
+    localStorage.removeItem(LEGACY_KEY);
+    state = await loadState();
+    weekId = state.lastWeekId;
+    if (options.storeDevice) {
+      if (options.remember) localStorage.setItem(PASS_KEY, pw);
+      else localStorage.removeItem(PASS_KEY);
+    }
+    sessionStorage.setItem(SESSION_KEY, pw);
+    sessionStorage.removeItem(LOCK_KEY);
+    els.lock.hidden = true;
+    els.sheet.hidden = false;
+    render();
+  }
+
+  async function onUnlock(event) {
+    event.preventDefault();
+    els.lockError.hidden = true;
+    els.lockSubmit.disabled = true;
+    els.lockSubmit.textContent = "Wird geprüft…";
+    try {
+      await unlock(els.lockPassword.value, {
+        storeDevice: true,
+        remember: els.lockRemember.checked,
+      });
+      els.lockPassword.value = "";
+    } catch {
+      els.lockError.hidden = false;
+      els.lockPassword.focus();
+      els.lockPassword.select();
+    } finally {
+      els.lockSubmit.disabled = false;
+      els.lockSubmit.textContent = "Öffnen";
+    }
+  }
+
+  function showGate() {
+    els.sheet.hidden = true;
+    els.lock.hidden = false;
+    document.title = "Stundenplan · Altenbach";
+    els.lockPassword.focus();
+  }
+
+  function lockApp() {
+    if (els.editor.open) els.editor.close();
+    password = "";
+    state = null;
+    defaultStandard = null;
+    sessionStorage.removeItem(SESSION_KEY);
+    sessionStorage.setItem(LOCK_KEY, "1");
+    els.rota.replaceChildren();
+    els.days.replaceChildren();
+    els.note.value = "";
+    els.confirm.hidden = true;
+    showGate();
+  }
+
+  async function boot() {
+    if (sessionStorage.getItem(LOCK_KEY) === "1") {
+      showGate();
+      return;
+    }
+    const candidate = sessionStorage.getItem(SESSION_KEY) || localStorage.getItem(PASS_KEY);
+    if (candidate) {
+      try {
+        await unlock(candidate, { storeDevice: false });
+        els.lockRemember.checked = Boolean(localStorage.getItem(PASS_KEY));
+        return;
+      } catch {
+        sessionStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem(PASS_KEY);
+      }
+    }
+    showGate();
   }
 
   function el(tag, attrs, children) {

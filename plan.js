@@ -83,74 +83,64 @@
     },
   ];
 
-  // Winter standard. Thursday already includes the standing adjustment:
-  // Alex 10–13 and 16–18:30, Miki 10–16 and 18:30–22, Seferina unchanged.
-  const DEFAULT_STANDARD = deepFreeze({
-    alex: {
-      sun: [{ start: "10:00", end: null }],
-      mon: [],
-      tue: [
-        { start: "10:00", end: "13:00" },
-        { start: "16:00", end: "22:00" },
-      ],
-      wed: [
-        { start: "10:00", end: "13:00" },
-        { start: "16:00", end: "22:00" },
-      ],
-      thu: [
-        { start: "10:00", end: "13:00" },
-        { start: "16:00", end: "18:30" },
-      ],
-      fri: [
-        { start: "10:00", end: "13:00" },
-        { start: "16:00", end: "22:00" },
-      ],
-      sat: [
-        { start: "10:00", end: "13:00" },
-        { start: "16:00", end: "22:00" },
-      ],
-    },
-    miki: {
-      sun: [],
-      mon: [{ start: "10:00", end: null }],
-      tue: [
-        { start: "10:00", end: "16:00" },
-        { start: "18:30", end: "22:00" },
-      ],
-      wed: [{ start: "10:00", end: "16:00" }],
-      thu: [
-        { start: "10:00", end: "16:00" },
-        { start: "18:30", end: "22:00" },
-      ],
-      fri: [
-        { start: "10:00", end: "16:00" },
-        { start: "18:00", end: "22:00" },
-      ],
-      sat: [
-        { start: "10:00", end: "16:00" },
-        { start: "18:00", end: "22:00" },
-      ],
-    },
-    seferina: {
-      sun: [],
-      mon: [],
-      tue: [],
-      wed: [{ start: "13:00", end: "22:00" }],
-      thu: [{ start: "13:00", end: "22:00" }],
-      fri: [{ start: "13:00", end: "22:00" }],
-      sat: [{ start: "13:00", end: "22:00" }],
-    },
-  });
+  const VAULT_ITERATIONS = 200000;
 
-  function deepFreeze(value) {
-    if (!value || typeof value !== "object" || Object.isFrozen(value)) {
-      return value;
+  function bytesToBase64(bytes) {
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return btoa(binary);
+  }
+
+  function base64ToBytes(value) {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    return bytes;
+  }
+
+  async function deriveKey(password, salt, iterations) {
+    const material = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(password),
+      "PBKDF2",
+      false,
+      ["deriveKey"],
+    );
+    return crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+      material,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"],
+    );
+  }
+
+  async function encryptJson(value, password) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(password, salt, VAULT_ITERATIONS);
+    const plain = new TextEncoder().encode(JSON.stringify(value));
+    const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plain));
+    return {
+      v: 1,
+      iterations: VAULT_ITERATIONS,
+      salt: bytesToBase64(salt),
+      iv: bytesToBase64(iv),
+      data: bytesToBase64(cipher),
+    };
+  }
+
+  async function decryptJson(vault, password) {
+    if (!vault || vault.v !== 1 || !vault.salt || !vault.iv || !vault.data) {
+      throw new Error("Tresor ungültig");
     }
-    Object.freeze(value);
-    for (const nested of Object.values(value)) {
-      deepFreeze(nested);
-    }
-    return value;
+    const key = await deriveKey(password, base64ToBytes(vault.salt), vault.iterations || VAULT_ITERATIONS);
+    const plain = await crypto.subtle.decrypt(
+      { name: "AES-GCM", iv: base64ToBytes(vault.iv) },
+      key,
+      base64ToBytes(vault.data),
+    );
+    return JSON.parse(new TextDecoder().decode(plain));
   }
 
   function isTime(value) {
@@ -400,7 +390,6 @@
     DAYS,
     MONTHS,
     PRESETS,
-    DEFAULT_STANDARD,
     SERVICE_START,
     SERVICE_END,
     SCALE_START,
@@ -431,5 +420,7 @@
     formatWhatsApp,
     suggestNextShift,
     scalePercent,
+    encryptJson,
+    decryptJson,
   };
 });

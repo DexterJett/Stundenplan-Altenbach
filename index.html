@@ -12,7 +12,24 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="sheet">
+    <div id="lock" class="lock">
+      <form id="lock-form">
+        <p class="eyebrow">Stundenplan</p>
+        <h1>Altenbach</h1>
+        <p class="lede">Der Plan ist mit einem Passwort geschützt.</p>
+        <label class="lock-field">
+          Passwort
+          <input id="lock-password" type="password" autocomplete="current-password" required />
+        </label>
+        <label class="lock-remember">
+          <input id="lock-remember" type="checkbox" />
+          Auf diesem Gerät merken
+        </label>
+        <p id="lock-error" class="errors" hidden>Das Passwort stimmt nicht.</p>
+        <button id="lock-submit" class="primary" type="submit">Öffnen</button>
+      </form>
+    </div>
+    <div class="sheet" hidden>
       <header class="masthead">
         <div>
           <p class="eyebrow">Stundenplan · Winter</p>
@@ -65,6 +82,7 @@
         </div>
 
         <div class="actions no-print">
+          <button type="button" id="lock-btn" class="text-btn">Sperren</button>
           <button type="button" id="print-btn">Drucken</button>
           <button type="button" id="copy-btn">WhatsApp-Text</button>
           <details>
@@ -138,6 +156,7 @@
     </dialog>
 
     <script src="plan.js"></script>
+    <script src="vault.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

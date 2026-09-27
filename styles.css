@@ -39,6 +39,49 @@ button:focus-visible, input:focus-visible, summary:focus-visible, textarea:focus
   outline-offset: 2px;
 }
 
+.lock {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.lock form {
+  width: min(440px, 100%);
+  background: var(--sheet);
+  border-radius: 22px;
+  padding: 32px 28px;
+  box-shadow: var(--shadow);
+}
+.lock h1 {
+  font-size: clamp(42px, 8vw, 64px);
+}
+.lock-field {
+  display: grid;
+  gap: 6px;
+  margin: 18px 0 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--soft);
+}
+.lock-field input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.lock-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-weight: 600;
+}
+.lock .errors { margin: 0 0 12px; }
+.lock .primary { width: 100%; }
+
 .sheet {
   width: min(1180px, calc(100% - 28px));
   margin: 22px auto 40px;

@@ -1,11 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const plan = require("../plan.js");
+const vault = require("../vault.js");
 
 const {
   PEOPLE,
   DAYS,
-  DEFAULT_STANDARD,
   clonePlan,
   personHours,
   formatPersonLoad,
@@ -22,82 +23,44 @@ const {
   sanitizePlan,
   shiftsEqual,
   plansEqual,
+  encryptJson,
+  decryptJson,
 } = plan;
 
-test("Donnerstag ist die Grundanpassung, Seferina bleibt", () => {
-  assert.deepEqual(DEFAULT_STANDARD.alex.thu, [
-    { start: "10:00", end: "13:00" },
-    { start: "16:00", end: "18:30" },
-  ]);
-  assert.deepEqual(DEFAULT_STANDARD.miki.thu, [
-    { start: "10:00", end: "16:00" },
-    { start: "18:30", end: "22:00" },
-  ]);
-  assert.deepEqual(DEFAULT_STANDARD.seferina.thu, [{ start: "13:00", end: "22:00" }]);
-  assert.deepEqual(DEFAULT_STANDARD.seferina.thu, DEFAULT_STANDARD.seferina.wed);
+function blankDays() {
+  return Object.fromEntries(DAYS.map((day) => [day.id, []]));
+}
+
+function samplePlan() {
+  const schedule = {};
+  for (const person of PEOPLE) schedule[person.id] = blankDays();
+  schedule.alex.sun = [{ start: "09:00", end: null }];
+  schedule.alex.tue = [{ start: "09:00", end: "12:00" }];
+  schedule.miki.mon = [{ start: "11:00", end: "15:00" }];
+  schedule.seferina.wed = [{ start: "13:00", end: "22:00" }];
+  return schedule;
+}
+
+test("Stunden zählen offene Schichten nicht als feste Zeit", () => {
+  const schedule = samplePlan();
+  assert.equal(personHours(schedule, "alex").open, 1);
+  assert.equal(personHours(schedule, "alex").minutes, 180);
+  assert.equal(formatPersonLoad(schedule, "alex"), "3 Std. + 1× bis Ende");
+  assert.equal(formatPersonLoad(schedule, "seferina"), "9 Std.");
+  assert.equal(personHours(schedule, "miki").open, 0);
 });
 
-test("offene Schichten und freie Tage", () => {
-  assert.deepEqual(DEFAULT_STANDARD.alex.sun, [{ start: "10:00", end: null }]);
-  assert.deepEqual(DEFAULT_STANDARD.miki.sun, []);
-  assert.deepEqual(DEFAULT_STANDARD.seferina.sun, []);
-  assert.deepEqual(DEFAULT_STANDARD.alex.mon, []);
-  assert.deepEqual(DEFAULT_STANDARD.miki.mon, [{ start: "10:00", end: null }]);
-  assert.deepEqual(DEFAULT_STANDARD.seferina.mon, []);
-  assert.deepEqual(DEFAULT_STANDARD.seferina.tue, []);
-  assert.deepEqual(DEFAULT_STANDARD.miki.wed, [{ start: "10:00", end: "16:00" }]);
+test("eine Lücke gibt es nur, wenn niemand da ist", () => {
+  const schedule = samplePlan();
+  assert.equal(formatGaps(findDayGaps(schedule, "tue")), "12:00–22:00");
+  schedule.seferina.tue = [{ start: "12:00", end: "22:00" }];
+  assert.deepEqual(findDayGaps(schedule, "tue"), []);
+  assert.deepEqual(findDayGaps(schedule, "sun"), []);
 });
 
-test("Freitag und Samstag sind gleich, Dienstagabend beginnt später", () => {
-  for (const person of PEOPLE) {
-    assert.deepEqual(DEFAULT_STANDARD[person.id].fri, DEFAULT_STANDARD[person.id].sat);
-  }
-  assert.equal(DEFAULT_STANDARD.miki.tue[1].start, "18:30");
-  assert.equal(DEFAULT_STANDARD.miki.fri[1].start, "18:00");
-  assert.equal(DEFAULT_STANDARD.alex.fri[1].end, "22:00");
-});
-
-test("Wochenstunden zählen Ende nicht als feste Zeit", () => {
-  assert.equal(personHours(DEFAULT_STANDARD, "alex").minutes, 2490);
-  assert.equal(personHours(DEFAULT_STANDARD, "alex").open, 1);
-  assert.equal(formatPersonLoad(DEFAULT_STANDARD, "alex"), "41 Std. 30 Min. + 1× bis Ende");
-  assert.equal(personHours(DEFAULT_STANDARD, "miki").minutes, 2700);
-  assert.equal(personHours(DEFAULT_STANDARD, "miki").open, 1);
-  assert.equal(formatPersonLoad(DEFAULT_STANDARD, "miki"), "45 Std. + 1× bis Ende");
-  assert.equal(personHours(DEFAULT_STANDARD, "seferina").minutes, 2160);
-  assert.equal(formatPersonLoad(DEFAULT_STANDARD, "seferina"), "36 Std.");
-});
-
-test("der Standard hat zwischen 10 und 22 Uhr keine Lücke", () => {
-  for (const day of DAYS) {
-    assert.deepEqual(findDayGaps(DEFAULT_STANDARD, day.id), [], day.label);
-  }
-});
-
-test("Lücken nur wenn wirklich niemand da ist", () => {
-  const custom = clonePlan(DEFAULT_STANDARD);
-  custom.alex.tue = [{ start: "10:00", end: "13:00" }];
-  custom.miki.tue = [];
-  custom.seferina.tue = [];
-  assert.equal(formatGaps(findDayGaps(custom, "tue")), "13:00–22:00");
-
-  custom.seferina.tue = [{ start: "13:00", end: "22:00" }];
-  assert.deepEqual(findDayGaps(custom, "tue"), []);
-});
-
-test("offene Schicht deckt den Tag bis 22 Uhr", () => {
-  assert.deepEqual(findDayGaps(DEFAULT_STANDARD, "sun"), []);
-  assert.deepEqual(findDayGaps(DEFAULT_STANDARD, "mon"), []);
-});
-
-test("WhatsApp-Text nennt den angepassten Donnerstag", () => {
-  const text = formatWhatsApp(DEFAULT_STANDARD, { title: "Winterplan" });
-  const thursday = text.split("Donnerstag\n")[1].split("\n\n")[0];
-  assert.equal(
-    thursday,
-    ["Alex: 10:00–13:00, 16:00–18:30", "Miki: 10:00–16:00, 18:30–22:00", "Seferina: 13:00–22:00"].join("\n"),
-  );
-  assert.match(text, /Sonntag\nAlex: 10:00–Ende\nMiki: frei\nSeferina: frei/);
+test("WhatsApp-Text nennt frei und Ende", () => {
+  const text = formatWhatsApp(samplePlan(), { title: "Test" });
+  assert.match(text, /Sonntag\nAlex: 09:00–Ende\nMiki: frei\nSeferina: frei/);
   assert.match(text, /Ende = Schlusszeit offen/);
 });
 
@@ -112,13 +75,8 @@ test("Woche beginnt am Sonntag, auch über den Monatswechsel", () => {
   assert.equal(formatRange(new Date(2026, 8, 27)), "27. September – 3. Oktober 2026");
 });
 
-test("ungültige Schichten werden erkannt, der Plan bleibt prüfbar", () => {
-  assert.deepEqual(
-    validateShifts([
-      { start: "16:00", end: "13:00" },
-    ]),
-    ["Das Ende muss nach dem Anfang liegen."],
-  );
+test("ungültige Schichten werden erkannt", () => {
+  assert.deepEqual(validateShifts([{ start: "16:00", end: "13:00" }]), ["Das Ende muss nach dem Anfang liegen."]);
   assert.deepEqual(
     validateShifts([
       { start: "10:00", end: "16:00" },
@@ -128,16 +86,37 @@ test("ungültige Schichten werden erkannt, der Plan bleibt prüfbar", () => {
   );
   assert.deepEqual(validateShifts([{ start: "10:00", end: null }]), []);
 
-  const broken = clonePlan(DEFAULT_STANDARD);
+  const schedule = samplePlan();
+  const broken = clonePlan(schedule);
   delete broken.seferina;
   assert.equal(isPlan(broken), false);
-  assert.equal(isPlan(DEFAULT_STANDARD), true);
+  assert.equal(isPlan(schedule), true);
 
-  const reversed = clonePlan(DEFAULT_STANDARD);
-  reversed.alex.thu = [
-    { start: "16:00", end: "18:30" },
-    { start: "10:00", end: "13:00" },
+  const reversed = clonePlan(schedule);
+  reversed.alex.tue = [
+    { start: "12:00", end: "15:00" },
+    { start: "09:00", end: "12:00" },
   ];
-  assert.equal(shiftsEqual(reversed.alex.thu, DEFAULT_STANDARD.alex.thu), true);
-  assert.equal(plansEqual(sanitizePlan(reversed), DEFAULT_STANDARD), true);
+  schedule.alex.tue = [
+    { start: "09:00", end: "12:00" },
+    { start: "12:00", end: "15:00" },
+  ];
+  assert.equal(shiftsEqual(reversed.alex.tue, schedule.alex.tue), true);
+  assert.equal(plansEqual(sanitizePlan(reversed), schedule), true);
+});
+
+test("falsches Passwort öffnet den Tresor nicht", async () => {
+  const sealed = await encryptJson({ standard: samplePlan() }, "richtig");
+  const opened = await decryptJson(sealed, "richtig");
+  assert.equal(isPlan(opened.standard), true);
+  await assert.rejects(() => decryptJson(sealed, "falsch"));
+});
+
+test("der veröffentlichte Tresor enthält den Plan nicht im Klartext", () => {
+  const source = fs.readFileSync(require.resolve("../vault.js"), "utf8");
+  assert.equal(vault.v, 1);
+  assert.equal(typeof vault.data, "string");
+  for (const secret of ["10:00", "18:30", "22:00", "Seferina", "Ende"]) {
+    assert.equal(source.includes(secret), false, secret);
+  }
 });
