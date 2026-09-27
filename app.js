@@ -660,7 +660,7 @@
     password = pw;
     localStorage.removeItem(LEGACY_KEY);
     state = await loadState();
-    weekId = state.lastWeekId;
+    weekId = P.toDateId(P.startOfWeek(P.parseDateId(state.lastWeekId)));
     if (options.storeDevice) {
       if (options.remember) localStorage.setItem(PASS_KEY, pw);
       else localStorage.removeItem(PASS_KEY);
