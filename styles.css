@@ -474,7 +474,6 @@ td {
   background: #fff;
 }
 td.is-today { background: var(--today); }
-td.is-changed .cell { background: var(--changed); }
 thead th.is-today span { color: var(--paprika); }
 
 .pills { display: grid; gap: 4px; width: 100%; }
