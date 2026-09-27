@@ -17,13 +17,13 @@
   ];
 
   const DAYS = [
-    { id: "sun", label: "Sonntag", short: "So" },
     { id: "mon", label: "Montag", short: "Mo" },
     { id: "tue", label: "Dienstag", short: "Di" },
     { id: "wed", label: "Mittwoch", short: "Mi" },
     { id: "thu", label: "Donnerstag", short: "Do" },
     { id: "fri", label: "Freitag", short: "Fr" },
     { id: "sat", label: "Samstag", short: "Sa" },
+    { id: "sun", label: "Sonntag", short: "So" },
   ];
 
   const MONTHS = [
@@ -311,9 +311,11 @@
   }
 
   function startOfWeek(date) {
-    const sunday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    sunday.setDate(sunday.getDate() - sunday.getDay());
-    return sunday;
+    const monday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const weekday = monday.getDay();
+    const offset = weekday === 0 ? 6 : weekday - 1;
+    monday.setDate(monday.getDate() - offset);
+    return monday;
   }
 
   function addDays(date, amount) {
@@ -333,19 +335,19 @@
     return new Date(year, month - 1, day);
   }
 
-  function formatRange(sunday) {
-    const saturday = addDays(sunday, 6);
-    if (sunday.getMonth() === saturday.getMonth() && sunday.getFullYear() === saturday.getFullYear()) {
-      return `${sunday.getDate()}.–${saturday.getDate()}. ${MONTHS[saturday.getMonth()]} ${saturday.getFullYear()}`;
+  function formatRange(weekStart) {
+    const weekEnd = addDays(weekStart, 6);
+    if (weekStart.getMonth() === weekEnd.getMonth() && weekStart.getFullYear() === weekEnd.getFullYear()) {
+      return `${weekStart.getDate()}.–${weekEnd.getDate()}. ${MONTHS[weekEnd.getMonth()]} ${weekEnd.getFullYear()}`;
     }
-    const sameYear = sunday.getFullYear() === saturday.getFullYear();
-    const start = `${sunday.getDate()}. ${MONTHS[sunday.getMonth()]}`;
-    const end = `${saturday.getDate()}. ${MONTHS[saturday.getMonth()]} ${saturday.getFullYear()}`;
-    return sameYear ? `${start} – ${end}` : `${start} ${sunday.getFullYear()} – ${end}`;
+    const sameYear = weekStart.getFullYear() === weekEnd.getFullYear();
+    const start = `${weekStart.getDate()}. ${MONTHS[weekStart.getMonth()]}`;
+    const end = `${weekEnd.getDate()}. ${MONTHS[weekEnd.getMonth()]} ${weekEnd.getFullYear()}`;
+    return sameYear ? `${start} – ${end}` : `${start} ${weekStart.getFullYear()} – ${end}`;
   }
 
-  function weekRelation(sunday, today) {
-    const diffDays = Math.round((startOfWeek(sunday) - startOfWeek(today)) / 86400000);
+  function weekRelation(weekStart, today) {
+    const diffDays = Math.round((startOfWeek(weekStart) - startOfWeek(today)) / 86400000);
     if (diffDays === 0) return "Diese Woche";
     if (diffDays === 7) return "Nächste Woche";
     if (diffDays === -7) return "Letzte Woche";

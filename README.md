@@ -14,7 +14,7 @@ Der Wochenplan liegt verschlüsselt in `vault.js`. Ohne Passwort sind die Zeiten
 
 ## Bedienung
 
-- Die Woche beginnt am Sonntag, wie im bisherigen Plan.
+- Die Woche beginnt am Montag und endet am Sonntag.
 - Mit den Pfeilen die Woche wählen. **Diese Woche** ändert nur diese Woche, **Standardplan** ändert die Vorlage.
 - Einen Tag anklicken und die Zeiten anpassen. **Ende** heißt: die Schicht läuft, bis Feierabend ist. Im alten Plan stand dafür **E**.
 - Wochen ohne eigene Anpassung übernehmen den Standardplan.
