@@ -373,6 +373,28 @@
     return lines.join("\n");
   }
 
+  function sanitizePresets(list) {
+    if (!Array.isArray(list)) return [];
+    const presets = [];
+    const seen = new Set();
+    for (const item of list) {
+      if (!item || typeof item.label !== "string" || !Array.isArray(item.shifts)) continue;
+      const label = item.label.trim().slice(0, 40);
+      if (!label) continue;
+      const key = label.toLocaleLowerCase("de");
+      if (seen.has(key)) continue;
+      if (validateShifts(item.shifts).length) continue;
+      seen.add(key);
+      presets.push({
+        id: typeof item.id === "string" && item.id ? item.id : `eigen-${presets.length + 1}`,
+        label,
+        shifts: canonicalShifts(item.shifts),
+      });
+      if (presets.length >= 24) break;
+    }
+    return presets;
+  }
+
   function suggestNextShift(shifts) {
     if (!shifts.length) return { start: "10:00", end: "13:00" };
     const last = shifts[shifts.length - 1];
@@ -421,6 +443,7 @@
     weekRelation,
     formatWhatsApp,
     suggestNextShift,
+    sanitizePresets,
     scalePercent,
     encryptJson,
     decryptJson,
