@@ -117,6 +117,34 @@ test("falsches Passwort öffnet den Tresor nicht", async () => {
   await assert.rejects(() => decryptJson(sealed, "falsch"));
 });
 
+test("Urlaub bleibt ohne Stunden und ist nicht frei", () => {
+  const schedule = samplePlan();
+  plan.setAbsence(schedule, "miki", "sun", "urlaub");
+  assert.equal(plan.readAbsence(schedule, "miki", "sun"), "urlaub");
+  assert.equal(plan.formatShiftList([], "urlaub"), "Urlaub");
+  assert.equal(personHours(schedule, "miki").minutes, 240);
+  const text = formatWhatsApp(schedule, { title: "Test", dayNotes: { mon: "  Markt  " } });
+  assert.match(text, /Montag\nMarkt\n/);
+  assert.match(text, /Sonntag\nAlex: 09:00–Ende\nMiki: Urlaub\nSeferina: frei\n\nEnde = Schlusszeit offen$/);
+  const off = clonePlan(schedule);
+  plan.setAbsence(off, "miki", "sun", null);
+  assert.equal(plansEqual(schedule, off), false);
+  const withShift = clonePlan(schedule);
+  withShift.miki.sun = [{ start: "10:00", end: "12:00" }];
+  assert.equal(plan.readAbsence(sanitizePlan(withShift), "miki", "sun"), null);
+  const notes = plan.sanitizeDayNotes({ mon: " Markt ", tue: "x".repeat(80), fri: 4 });
+  assert.equal(notes.mon, "Markt");
+  assert.equal(notes.tue.length, plan.DAY_NOTE_MAX);
+  assert.equal(notes.fri, "");
+  assert.equal(plan.dayNotesEqual({ mon: " Markt " }, { mon: "Markt" }), true);
+  const presets = plan.sanitizePresets([
+    { label: "Sommer", shifts: [], absence: "urlaub" },
+    { label: "Mit Zeit", shifts: [{ start: "10:00", end: "12:00" }], absence: "urlaub" },
+  ]);
+  assert.equal(presets[0].absence, "urlaub");
+  assert.equal(presets[1].absence, undefined);
+});
+
 test("eigene Schnellwahlen behalten nur gültige Zeiten", () => {
   const presets = plan.sanitizePresets([
     { id: "a", label: "  Früh kurz  ", shifts: [{ start: "10:00", end: "13:00" }] },

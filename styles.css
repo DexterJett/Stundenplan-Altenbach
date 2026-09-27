@@ -498,6 +498,54 @@ thead th.is-today span { color: var(--paprika); }
   color: var(--soft);
   font-style: italic;
 }
+.leave {
+  display: inline-block;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #efe4f2;
+  color: #6a3d78;
+  font-size: 12.5px;
+  font-style: normal;
+  font-weight: 700;
+}
+.frei-label.leave {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+thead th .day-note-input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 4px 6px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.day-note-input::placeholder {
+  color: var(--soft);
+  font-weight: 500;
+}
+.day-note-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 460px;
+  margin: 0 0 8px;
+}
+.day-note-field span {
+  flex: none;
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+.day-note-field .day-note-input { margin-top: 0; }
+.print-reserve { display: none; }
 .edit-hint, .changed-flag {
   font-size: 11px;
   font-weight: 700;
@@ -851,9 +899,12 @@ legend { padding: 0; font-size: 13px; font-weight: 700; color: var(--soft); }
   .weekbar { margin-top: 6px; }
   .week-title h2 { font-size: 20px; }
   .week-title p { font-size: 11px; }
-  .banner {
-    margin-top: 4px;
-    padding: 4px 8px;
+  .print-reserve {
+    display: block;
+    margin: 2px 0 0;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 650;
   }
   .note { margin-top: 4px; }
   .note.is-empty { display: none !important; }
@@ -879,7 +930,18 @@ legend { padding: 0; font-size: 13px; font-weight: 700; color: var(--soft); }
     padding: 3px;
   }
   .who { font-size: 13px; }
-  .pill { font-size: 11px; padding: 2px 6px; }
+  .pill, .leave { font-size: 11px; padding: 2px 6px; }
+  thead th .day-note-input {
+    margin-top: 2px;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+    font-size: 11px;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  thead th .day-note-input.is-empty { display: none !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
