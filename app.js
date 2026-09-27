@@ -48,6 +48,8 @@
     shiftList: document.querySelector("#shift-list"),
     addShift: document.querySelector("#add-shift"),
     presets: document.querySelector("#presets"),
+    presetName: document.querySelector("#preset-name"),
+    presetSave: document.querySelector("#preset-save"),
     close: document.querySelector("#editor-close"),
     lock: document.querySelector("#lock"),
     lockForm: document.querySelector("#lock-form"),
@@ -138,10 +140,16 @@
   });
   els.rota.addEventListener("click", onEditClick);
   els.days.addEventListener("click", onEditClick);
+  els.presetSave.addEventListener("click", savePreset);
+  els.presetName.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    savePreset();
+  });
   els.lockForm.addEventListener("submit", onUnlock);
   els.lockBtn.addEventListener("click", lockApp);
 
-  buildPresets();
+  renderPresets();
   boot().catch(() => showGate());
 
   function onEditClick(event) {
@@ -483,23 +491,90 @@
     commit(editorCtx.personId, editorCtx.dayId, draft);
   }
 
-  function buildPresets() {
-    P.PRESETS.forEach((preset, index) => {
-      const button = el("button", { type: "button", "data-index": String(index) }, preset.label);
-      button.addEventListener("click", () => {
-        draft = preset.shifts.map((shift) => ({ ...shift }));
-        renderDraft();
-        afterDraftEdit();
+  function customPresets() {
+    return state && Array.isArray(state.presets) ? state.presets : [];
+  }
+
+  function applyPreset(shifts) {
+    draft = shifts.map((shift) => ({ ...shift }));
+    renderDraft();
+    afterDraftEdit();
+  }
+
+  function renderPresets() {
+    els.presets.replaceChildren();
+    for (const preset of P.PRESETS) {
+      els.presets.append(presetButton(preset, false));
+    }
+    for (const preset of customPresets()) {
+      const chip = el("span", { class: "preset-chip" });
+      const remove = el("button", {
+        type: "button",
+        class: "preset-delete",
+        "aria-label": `${preset.label} entfernen`,
+      }, "×");
+      remove.addEventListener("click", () => {
+        state.presets = state.presets.filter((item) => item.id !== preset.id);
+        persist(true);
+        renderPresets();
+        toast("Schnellwahl entfernt.");
       });
-      els.presets.append(button);
-    });
+      chip.append(presetButton(preset, true), remove);
+      els.presets.append(chip);
+    }
+    updatePresetActive();
+  }
+
+  function presetButton(preset, custom) {
+    const button = el("button", {
+      type: "button",
+      class: custom ? "preset-apply" : "",
+      "data-shifts": JSON.stringify(P.canonicalShifts(preset.shifts)),
+    }, preset.label);
+    button.addEventListener("click", () => applyPreset(preset.shifts));
+    return button;
   }
 
   function updatePresetActive() {
-    for (const button of els.presets.querySelectorAll("button")) {
-      const preset = P.PRESETS[Number(button.dataset.index)];
-      button.classList.toggle("is-active", P.shiftsEqual(preset.shifts, draft));
+    const current = JSON.stringify(P.canonicalShifts(draft));
+    for (const button of els.presets.querySelectorAll("[data-shifts]")) {
+      button.classList.toggle("is-active", button.dataset.shifts === current);
     }
+  }
+
+  function savePreset() {
+    if (!state) return;
+    if (!Array.isArray(state.presets)) state.presets = [];
+    const errors = P.validateShifts(draft);
+    els.errors.hidden = errors.length === 0;
+    els.errors.textContent = errors.join(" ");
+    if (errors.length) return;
+    const label = els.presetName.value.trim().slice(0, 40);
+    if (!label) {
+      els.presetName.focus();
+      toast("Gib der Schnellwahl einen Namen.");
+      return;
+    }
+    const builtIn = P.PRESETS.some((preset) => preset.label.toLocaleLowerCase("de") === label.toLocaleLowerCase("de"));
+    if (builtIn) {
+      toast("Diesen Namen gibt es schon.");
+      els.presetName.focus();
+      return;
+    }
+    const shifts = P.canonicalShifts(draft);
+    const existing = state.presets.find((preset) => preset.label.toLocaleLowerCase("de") === label.toLocaleLowerCase("de"));
+    if (existing) {
+      existing.shifts = shifts;
+    } else if (state.presets.length >= 24) {
+      toast("Es passen höchstens 24 eigene Schnellwahlen.");
+      return;
+    } else {
+      state.presets.push({ id: crypto.randomUUID(), label, shifts });
+    }
+    els.presetName.value = "";
+    persist(true);
+    renderPresets();
+    toast("Schnellwahl gespeichert.");
   }
 
   async function copyWhatsApp() {
@@ -522,7 +597,7 @@
   }
 
   function downloadPlan() {
-    const payload = { version: 1, standard: state.standard, weeks: state.weeks };
+    const payload = { version: 2, standard: state.standard, weeks: state.weeks, presets: state.presets };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -540,7 +615,7 @@
       toast("Die Datei konnte nicht gelesen werden.");
       return;
     }
-    if (!data || data.version !== 1 || !P.isPlan(data.standard)) {
+    if (!data || (data.version !== 1 && data.version !== 2) || !P.isPlan(data.standard)) {
       toast("Das ist keine gültige Sicherungsdatei.");
       return;
     }
@@ -557,8 +632,10 @@
     ask("Den Plan auf diesem Computer durch die Datei ersetzen?", () => {
       state.standard = P.sanitizePlan(data.standard);
       state.weeks = weeks;
+      if (Array.isArray(data.presets)) state.presets = P.sanitizePresets(data.presets);
       persist(true);
       render();
+      renderPresets();
       toast("Sicherung geladen.");
     });
   }
@@ -592,12 +669,14 @@
       weeks: state.weeks,
       lastWeekId: state.lastWeekId,
       hintDismissed: state.hintDismissed === true,
+      presets: state.presets,
     };
     persistChain = persistChain
       .then(async () => {
         const secret = await P.encryptJson({
           standard: snapshot.standard,
           weeks: snapshot.weeks,
+          presets: snapshot.presets,
         }, password);
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
           version: 2,
@@ -625,6 +704,7 @@
       version: 2,
       standard: P.clonePlan(defaultStandard),
       weeks: {},
+      presets: [],
       lastWeekId: P.toDateId(P.startOfWeek(new Date())),
       hintDismissed: false,
     };
@@ -647,6 +727,7 @@
           };
         }
       }
+      if (Array.isArray(secret.presets)) base.presets = P.sanitizePresets(secret.presets);
     } catch {
       return base;
     }
@@ -670,6 +751,7 @@
     els.lock.hidden = true;
     els.sheet.hidden = false;
     render();
+    renderPresets();
   }
 
   async function onUnlock(event) {

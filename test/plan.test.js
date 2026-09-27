@@ -117,6 +117,21 @@ test("falsches Passwort öffnet den Tresor nicht", async () => {
   await assert.rejects(() => decryptJson(sealed, "falsch"));
 });
 
+test("eigene Schnellwahlen behalten nur gültige Zeiten", () => {
+  const presets = plan.sanitizePresets([
+    { id: "a", label: "  Früh kurz  ", shifts: [{ start: "10:00", end: "13:00" }] },
+    { label: "früh kurz", shifts: [{ start: "11:00", end: "12:00" }] },
+    { label: "kaputt", shifts: [{ start: "16:00", end: "10:00" }] },
+    { label: "   ", shifts: [] },
+    { label: "Offen", shifts: [{ start: "10:00", end: null }] },
+  ]);
+  assert.equal(presets.length, 2);
+  assert.equal(presets[0].label, "Früh kurz");
+  assert.deepEqual(presets[0].shifts, [{ start: "10:00", end: "13:00" }]);
+  assert.equal(presets[1].label, "Offen");
+  assert.equal(presets[1].shifts[0].end, null);
+});
+
 test("der veröffentlichte Tresor enthält den Plan nicht im Klartext", () => {
   const source = fs.readFileSync(require.resolve("../vault.js"), "utf8");
   assert.equal(vault.v, 1);

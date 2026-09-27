@@ -752,18 +752,61 @@ fieldset {
 }
 legend { padding: 0; font-size: 13px; font-weight: 700; color: var(--soft); }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.presets button {
+.presets > button,
+.preset-chip {
   border: 1px solid var(--line);
   background: #fff;
   border-radius: 999px;
-  padding: 7px 10px;
   font-weight: 600;
   font-size: 13px;
 }
-.presets button.is-active {
+.presets > button {
+  padding: 7px 10px;
+}
+.presets > button.is-active,
+.preset-chip:has(.is-active) {
   border-color: var(--ink);
   background: var(--ink);
   color: #f6f0e6;
+}
+.preset-chip {
+  display: inline-flex;
+  align-items: center;
+}
+.preset-chip button {
+  border: 0;
+  background: transparent;
+  border-radius: 0;
+  color: inherit;
+  font-weight: 600;
+  font-size: 13px;
+}
+.preset-chip .preset-apply { padding: 7px 4px 7px 10px; }
+.preset-chip .preset-delete {
+  padding: 7px 10px 7px 4px;
+  color: var(--paprika);
+  font-size: 16px;
+  line-height: 1;
+}
+.preset-chip:has(.is-active) .preset-delete { color: #f6f0e6; }
+.preset-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.preset-create input {
+  flex: 1 1 160px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+}
+.preset-hint {
+  margin: 8px 0 0;
+  color: var(--soft);
+  font-size: 12px;
 }
 .editor-save { margin: 14px 0; color: var(--soft); font-size: 13px; }
 .empty-day { margin: 0 0 8px; color: var(--soft); font-style: italic; }
