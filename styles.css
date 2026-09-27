@@ -820,15 +820,66 @@ legend { padding: 0; font-size: 13px; font-weight: 700; color: var(--soft); }
 }
 
 @media print {
-  @page { size: A4 landscape; margin: 10mm; }
-  body { background: white; }
-  .sheet { width: auto; margin: 0; border: 0; box-shadow: none; padding: 0; }
-  .no-print, .edit-hint { display: none !important; }
-  .toolbar { position: static; padding: 0; backdrop-filter: none; }
-  thead th:first-child, tbody th { position: static; }
-  table { min-width: 0; }
-  .day-card, tr { break-inside: avoid; }
-  .cell { min-height: 0; }
+  @page { size: A4 landscape; margin: 8mm; }
+  html, body {
+    background: white !important;
+    height: auto;
+  }
+  .lock, dialog, .toast, .no-print, .print-skip, .edit-hint, .load, .legend, .changed-flag {
+    display: none !important;
+  }
+  .sheet {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: white;
+  }
+  .masthead {
+    align-items: flex-end;
+    gap: 12px;
+    padding-bottom: 6px;
+    margin-bottom: 2px;
+  }
+  h1 { font-size: 28px; }
+  .eyebrow { margin-bottom: 0; }
+  .lede { margin-top: 2px; }
+  .e-note { font-size: 11px; }
+  .toolbar { margin: 0; padding: 0; }
+  .weekbar { margin-top: 6px; }
+  .week-title h2 { font-size: 20px; }
+  .week-title p { font-size: 11px; }
+  .banner {
+    margin-top: 4px;
+    padding: 4px 8px;
+  }
+  .note { margin-top: 4px; }
+  .note.is-empty { display: none !important; }
+  .note input {
+    border: 0;
+    padding: 0 0 2px;
+    background: transparent;
+  }
+  .block { margin-top: 8px; }
+  .table-scroll { overflow: visible; }
+  table { min-width: 0; width: 100%; font-size: 12px; }
+  thead th:first-child, tbody th {
+    position: static;
+    min-width: 0;
+    width: 28mm;
+  }
+  thead th { padding-bottom: 4px; }
+  thead th span { font-size: 14px; }
+  td { padding: 2px; }
+  .cell {
+    min-height: 0;
+    gap: 3px;
+    padding: 3px;
+  }
+  .who { font-size: 13px; }
+  .pill { font-size: 11px; padding: 2px 6px; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 

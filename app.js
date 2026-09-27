@@ -99,6 +99,9 @@
     els.confirm.hidden = true;
   });
   els.print.addEventListener("click", () => window.print());
+  window.addEventListener("beforeprint", () => {
+    els.noteWrap.classList.toggle("is-empty", !els.note.value.trim());
+  });
   els.copy.addEventListener("click", copyWhatsApp);
   els.download.addEventListener("click", downloadPlan);
   els.upload.addEventListener("click", () => els.uploadInput.click());
