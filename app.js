@@ -103,7 +103,11 @@
   window.addEventListener("beforeprint", () => {
     els.noteWrap.classList.toggle("is-empty", !els.note.value.trim());
     for (const input of els.rota.querySelectorAll("[data-day-note-input]")) {
-      input.classList.toggle("is-empty", !input.value.trim());
+      const text = input.value.replace(/\s+/g, " ").trim();
+      const printed = input.parentElement.querySelector(".day-note-print");
+      if (!printed) continue;
+      printed.textContent = text;
+      printed.classList.toggle("is-empty", !text);
     }
   });
   function onDayNoteInput(event) {
@@ -318,17 +322,19 @@
       const date = P.addDays(sunday, index);
       const head = el("th", { scope: "col" });
       if (P.toDateId(date) === todayId && !standardMode) head.classList.add("is-today");
+      const noteText = notes[day.id] || "";
       const note = el("input", {
         class: "day-note-input",
         type: "text",
         maxlength: String(P.DAY_NOTE_MAX),
         placeholder: "Kurzinfo",
-        value: notes[day.id] || "",
+        value: noteText,
         autocomplete: "off",
         "aria-label": `Kurzinfo ${day.label}`,
         "data-day-note-input": day.id,
       });
-      head.append(day.short, el("span", null, `${date.getDate()}.${date.getMonth() + 1}.`), note);
+      const printed = el("span", { class: noteText ? "day-note-print" : "day-note-print is-empty" }, noteText);
+      head.append(day.short, el("span", null, `${date.getDate()}.${date.getMonth() + 1}.`), note, printed);
       headRow.append(head);
     });
     thead.append(headRow);

@@ -545,6 +545,7 @@ thead th .day-note-input {
   font-weight: 700;
 }
 .day-note-field .day-note-input { margin-top: 0; }
+.day-note-print { display: none; }
 .print-reserve { display: none; }
 .edit-hint, .changed-flag {
   font-size: 11px;
@@ -915,7 +916,7 @@ legend { padding: 0; font-size: 13px; font-weight: 700; color: var(--soft); }
   }
   .block { margin-top: 8px; }
   .table-scroll { overflow: visible; }
-  table { min-width: 0; width: 100%; font-size: 12px; }
+  table { min-width: 0; width: 100%; table-layout: fixed; font-size: 12px; }
   thead th:first-child, tbody th {
     position: static;
     min-width: 0;
@@ -931,17 +932,26 @@ legend { padding: 0; font-size: 13px; font-weight: 700; color: var(--soft); }
   }
   .who { font-size: 13px; }
   .pill, .leave { font-size: 11px; padding: 2px 6px; }
-  thead th .day-note-input {
-    margin-top: 2px;
-    border: 0;
-    border-radius: 0;
-    padding: 0;
-    background: transparent;
-    font-size: 11px;
+  thead th {
+    overflow: visible;
+    white-space: normal;
+  }
+  thead th .day-note-input { display: none !important; }
+  thead th .day-note-print {
+    display: block;
+    max-width: 100%;
+    margin-top: 1px;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 650;
+    line-height: 1.25;
     letter-spacing: 0;
     text-transform: none;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
-  thead th .day-note-input.is-empty { display: none !important; }
+  thead th .day-note-print.is-empty { display: none !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 
