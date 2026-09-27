@@ -60,19 +60,24 @@ test("eine Lücke gibt es nur, wenn niemand da ist", () => {
 
 test("WhatsApp-Text nennt frei und Ende", () => {
   const text = formatWhatsApp(samplePlan(), { title: "Test" });
-  assert.match(text, /Sonntag\nAlex: 09:00–Ende\nMiki: frei\nSeferina: frei/);
+  assert.match(text, /^Stundenplan Küche Altenbach\nTest\n\nMontag\n/);
+  assert.match(text, /Sonntag\nAlex: 09:00–Ende\nMiki: frei\nSeferina: frei\n\nEnde = Schlusszeit offen$/);
   assert.match(text, /Ende = Schlusszeit offen/);
 });
 
-test("Woche beginnt am Sonntag, auch über den Monatswechsel", () => {
+test("Woche beginnt am Montag und endet am Sonntag", () => {
   const saturday = new Date(2026, 8, 26);
-  const sunday = startOfWeek(saturday);
-  assert.equal(toDateId(sunday), "2026-09-20");
-  assert.equal(saturday.getDay(), 6);
-  assert.equal(formatRange(sunday), "20.–26. September 2026");
-  assert.equal(weekRelation(sunday, saturday), "Diese Woche");
-  assert.equal(weekRelation(addDays(sunday, 7), saturday), "Nächste Woche");
-  assert.equal(formatRange(new Date(2026, 8, 27)), "27. September – 3. Oktober 2026");
+  const sunday = new Date(2026, 8, 27);
+  const monday = startOfWeek(saturday);
+  assert.equal(toDateId(monday), "2026-09-21");
+  assert.equal(toDateId(startOfWeek(sunday)), "2026-09-21");
+  assert.equal(monday.getDay(), 1);
+  assert.equal(formatRange(monday), "21.–27. September 2026");
+  assert.equal(weekRelation(monday, saturday), "Diese Woche");
+  assert.equal(weekRelation(monday, sunday), "Diese Woche");
+  assert.equal(weekRelation(addDays(monday, 7), saturday), "Nächste Woche");
+  assert.equal(formatRange(addDays(monday, 7)), "28. September – 4. Oktober 2026");
+  assert.deepEqual(DAYS.map((day) => day.short), ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"]);
 });
 
 test("ungültige Schichten werden erkannt", () => {
